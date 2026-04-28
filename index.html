@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TSP Arquitectura · Portal de Clientes</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════
+       LOADING OVERLAY
+  ════════════════════════════════════════ -->
+  <div id="loading-overlay" class="loading-overlay">
+    <div class="loading-inner">
+      <div class="logo-icon" style="margin:0 auto 16px;">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <rect x="1" y="1" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+          <rect x="8" y="1" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+          <rect x="1" y="8" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+          <rect x="8" y="8" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+        </svg>
+      </div>
+      <div class="loading-text">TSP · ARQUITECTURA</div>
+      <div class="loading-bar"><div class="loading-bar-inner"></div></div>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════
+       PANTALLA: LOGIN
+  ════════════════════════════════════════ -->
+  <div id="screen-login" class="screen">
+    <div class="login-wrap">
+      <div class="login-left">
+        <div class="login-left-grid"></div>
+        <div class="login-left-content">
+          <div class="brand-eyebrow">Arquitectura · Renders · Diseño</div>
+          <h1 class="login-headline">Tu proyecto,<br><em>en detalle.</em></h1>
+          <p class="login-desc">Portal privado para clientes · Acceso exclusivo</p>
+        </div>
+      </div>
+
+      <div class="login-right">
+        <div class="login-logo">
+          <div class="logo-icon">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <rect x="1" y="1" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+              <rect x="8" y="1" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+              <rect x="1" y="8" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+              <rect x="8" y="8" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+            </svg>
+          </div>
+          <span class="logo-text">TSP · ARQUITECTURA</span>
+        </div>
+
+        <h2 class="form-title">Acceder al portal</h2>
+        <p class="form-subtitle">Ingresá con tus credenciales</p>
+
+        <div class="alert alert-error"   id="login-error"   style="display:none"></div>
+        <div class="alert alert-success" id="login-success" style="display:none"></div>
+
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" type="email" id="login-email" placeholder="tu@email.com" autocomplete="username"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contraseña</label>
+          <input class="form-input" type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"/>
+        </div>
+
+        <button class="btn-primary" id="btn-login">Ingresar →</button>
+        <div class="divider"><span>ó</span></div>
+        <p class="link-text">¿Primera vez? <a href="#" id="go-register">Crear cuenta</a></p>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════
+       PANTALLA: REGISTRO
+  ════════════════════════════════════════ -->
+  <div id="screen-register" class="screen">
+    <div class="register-wrap">
+      <div class="login-logo" style="margin-bottom:32px">
+        <div class="logo-icon">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <rect x="1" y="1" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+            <rect x="8" y="1" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+            <rect x="1" y="8" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+            <rect x="8" y="8" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+          </svg>
+        </div>
+        <span class="logo-text">TSP · ARQUITECTURA</span>
+      </div>
+
+      <h2 class="form-title">Crear cuenta</h2>
+      <p class="form-subtitle">Completá tus datos para acceder a tu proyecto</p>
+
+      <div class="alert alert-error" id="reg-error" style="display:none"></div>
+
+      <div class="form-group">
+        <label class="form-label">Nombre completo</label>
+        <input class="form-input" type="text" id="reg-name" placeholder="Juan García"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" id="reg-email" placeholder="juan@email.com"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contraseña</label>
+        <input class="form-input" type="password" id="reg-pass" placeholder="Mínimo 6 caracteres"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirmar contraseña</label>
+        <input class="form-input" type="password" id="reg-pass2" placeholder="Repetí tu contraseña"/>
+      </div>
+
+      <div class="info-box">ⓘ &nbsp;Tobias revisará tu solicitud y activará tu acceso en 24 hs.</div>
+
+      <button class="btn-primary" id="btn-register">Crear cuenta →</button>
+      <p class="link-text" style="margin-top:16px">¿Ya tenés cuenta? <a href="#" id="go-login">Ingresar</a></p>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════
+       PANTALLA: DASHBOARD CLIENTE
+  ════════════════════════════════════════ -->
+  <div id="screen-dashboard" class="screen">
+    <div class="app-layout">
+
+      <aside class="sidebar">
+        <div class="sidebar-logo">
+          <div class="logo-icon small">
+            <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
+              <rect x="1" y="1" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+              <rect x="8" y="1" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+              <rect x="1" y="8" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+              <rect x="8" y="8" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+            </svg>
+          </div>
+          <span class="logo-text small">TSP · ARQ</span>
+        </div>
+        <nav class="sidebar-nav">
+          <a href="#" class="nav-item active">
+            <svg class="nav-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1">
+              <rect x="1" y="1" width="5" height="5"/><rect x="8" y="1" width="5" height="5"/>
+              <rect x="1" y="8" width="5" height="5"/><rect x="8" y="8" width="5" height="5"/>
+            </svg>Inicio
+          </a>
+          <a href="#" class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1">
+              <rect x="1" y="1" width="12" height="10" rx="1"/>
+              <circle cx="4.5" cy="4.5" r="1.5"/><path d="M1 8l3-2 3 3 2-2 4 3"/>
+            </svg>Renders
+          </a>
+          <a href="#" class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1">
+              <circle cx="7" cy="7" r="6"/><path d="M7 1v12M1 7h12"/>
+              <ellipse cx="7" cy="7" rx="6" ry="3"/>
+            </svg>Tour 360°
+          </a>
+          <a href="#" class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1">
+              <rect x="1" y="1" width="12" height="12"/>
+              <path d="M4 1v12M1 5h12M1 9h12"/>
+            </svg>Planos
+          </a>
+          <a href="#" class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1">
+              <circle cx="7" cy="7" r="6"/><path d="M7 5v5M7 3.5v.5"/>
+            </svg>Información
+          </a>
+        </nav>
+        <div class="sidebar-footer">
+          <div class="user-chip">
+            <div class="user-avatar" id="dash-avatar">--</div>
+            <div class="user-info">
+              <span class="user-name" id="dash-name">Cargando...</span>
+              <span class="user-role" id="dash-role">CLIENTE</span>
+            </div>
+          </div>
+          <button class="logout-btn" id="btn-logout">Cerrar sesión</button>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <div class="admin-banner" id="admin-banner" style="display:none">
+          <div class="admin-dot"></div>
+          Modo administrador activo ·
+          <a href="#" id="go-admin-panel" style="color:var(--gold-lt); margin-left:4px;">Ir al panel admin →</a>
+        </div>
+
+        <section class="project-hero">
+          <div class="hero-grid-bg"></div>
+          <div class="hero-badge" id="hero-badge">—</div>
+          <div class="notification-pill" id="hero-updated">—</div>
+          <div class="hero-body">
+            <h1 class="hero-title"  id="hero-title">Cargando proyecto...</h1>
+            <p class="hero-subtitle" id="hero-subtitle"></p>
+            <div class="hero-meta">
+              <span id="hero-location"></span>
+              <span id="hero-stage"></span>
+            </div>
+          </div>
+        </section>
+
+        <div class="sections-grid">
+          <!-- RENDERS -->
+          <div class="section-panel">
+            <div class="section-label">1. Renders</div>
+            <div class="section-head">
+              <h3 class="section-title">Renders</h3>
+              <button class="btn-ghost">Pantalla completa ↗</button>
+            </div>
+            <div class="renders-grid" id="renders-grid">
+              <div class="render-main render-ph r1">Sin renders aún</div>
+            </div>
+          </div>
+
+          <!-- TOUR 360 -->
+          <div class="section-panel">
+            <div class="section-label">2. Tour 360°</div>
+            <div class="section-head">
+              <h3 class="section-title">Tour 360°</h3>
+              <button class="btn-ghost">Pantalla completa ↗</button>
+            </div>
+            <div class="tour-viewer">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4a4740" stroke-width="1">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 2v20M2 12h20"/>
+                <ellipse cx="12" cy="12" rx="10" ry="5"/>
+              </svg>
+              Vista 360° interactiva
+            </div>
+            <div class="tour-rooms" id="tour-rooms">
+              <button class="room-btn active">Living</button>
+              <button class="room-btn">Cocina</button>
+              <button class="room-btn">Comedor</button>
+              <button class="room-btn">Dormit.</button>
+              <button class="room-btn">Terraza</button>
+            </div>
+          </div>
+
+          <!-- PLANOS -->
+          <div class="section-panel">
+            <div class="section-label">3. Planos</div>
+            <div class="section-head">
+              <h3 class="section-title">Planos</h3>
+              <button class="btn-ghost" id="btn-download-planos">Descargar todos ↓</button>
+            </div>
+            <div class="planos-wrap">
+              <ul class="planos-tabs" id="planos-tabs">
+                <li class="plano-tab active">Planta Baja</li>
+                <li class="plano-tab">Planta Alta</li>
+                <li class="plano-tab">Cortes</li>
+                <li class="plano-tab">Fachadas</li>
+                <li class="plano-tab">Implantación</li>
+              </ul>
+              <div class="plano-preview" id="plano-preview">Planta Baja · Escala 1:100</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- INFO -->
+        <section class="info-section">
+          <div class="section-label" style="grid-column:1/-1;margin-bottom:4px">4. Información del proyecto</div>
+          <div class="info-card">
+            <div class="info-img">Imagen del proyecto</div>
+            <div class="info-body">
+              <h4 class="info-card-title">Información del proyecto</h4>
+              <p class="info-card-text" id="info-desc">Diseño de vivienda unifamiliar desarrollada en dos plantas, con espacios amplios y conectados con el exterior.</p>
+            </div>
+          </div>
+          <div class="stats-grid" id="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon-box"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#b4a07a" stroke-width="1"><rect x="1" y="1" width="12" height="12"/></svg></div>
+              <div class="stat-label">Superficie total</div>
+              <div class="stat-value" id="stat-surface">— <span class="stat-unit">m²</span></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon-box"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#b4a07a" stroke-width="1"><rect x="1" y="3" width="12" height="10"/><path d="M1 3l6-2 6 2"/></svg></div>
+              <div class="stat-label">Sup. cubierta</div>
+              <div class="stat-value" id="stat-covered">— <span class="stat-unit">m²</span></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon-box"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#b4a07a" stroke-width="1"><rect x="1" y="1" width="12" height="12"/></svg></div>
+              <div class="stat-label">Ambientes</div>
+              <div class="stat-value" id="stat-rooms">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon-box"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#b4a07a" stroke-width="1"><rect x="1" y="5" width="10" height="7"/></svg></div>
+              <div class="stat-label">Baños</div>
+              <div class="stat-value" id="stat-bathrooms">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon-box"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#b4a07a" stroke-width="1"><path d="M2 12V5l5-4 5 4v7"/></svg></div>
+              <div class="stat-label">Materiales</div>
+              <div class="stat-value sm" id="stat-materials">—</div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════
+       PANTALLA: PANEL ADMIN
+  ════════════════════════════════════════ -->
+  <div id="screen-admin" class="screen">
+    <div class="app-layout">
+
+      <aside class="sidebar">
+        <div class="sidebar-logo">
+          <div class="logo-icon small">
+            <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
+              <rect x="1" y="1" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+              <rect x="8" y="1" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+              <rect x="1" y="8" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+              <rect x="8" y="8" width="5" height="5" stroke="#b4a07a" stroke-width="0.8"/>
+            </svg>
+          </div>
+          <span class="logo-text small">TSP · ARQ</span>
+        </div>
+        <nav class="sidebar-nav">
+          <a href="#" class="nav-item" id="admin-go-dash">
+            <svg class="nav-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1">
+              <path d="M1 7l6-6 6 6"/><path d="M2 7v6h4V9h4v4h4V7"/>
+            </svg>Dashboard
+          </a>
+          <a href="#" class="nav-item active" data-tab-trigger="usuarios">
+            <svg class="nav-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1">
+              <circle cx="5" cy="4" r="2"/><path d="M1 12c0-2.2 1.8-4 4-4s4 1.8 4 4"/>
+              <path d="M9 2c1.1 0 2 .9 2 2s-.9 2-2 2"/><path d="M11 8c1.3.5 2 1.5 2 3"/>
+            </svg>Usuarios
+          </a>
+          <a href="#" class="nav-item" data-tab-trigger="proyectos">
+            <svg class="nav-icon" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1">
+              <rect x="1" y="1" width="12" height="12"/><path d="M5 1v12M1 5h4M1 9h4"/>
+            </svg>Proyectos
+          </a>
+        </nav>
+        <div class="sidebar-footer">
+          <div class="user-chip">
+            <div class="user-avatar gold">TS</div>
+            <div class="user-info">
+              <span class="user-name">Tobias Silvapobas</span>
+              <span class="user-role">ADMIN</span>
+            </div>
+          </div>
+          <button class="logout-btn" id="btn-logout-admin">Cerrar sesión</button>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <div class="admin-banner always-show">
+          <div class="admin-dot"></div>
+          Panel de administración · Tobias Silvapobas Arquitectura
+        </div>
+
+        <div class="admin-tabs">
+          <button class="admin-tab active" data-tab="usuarios">Gestión de usuarios</button>
+          <button class="admin-tab" data-tab="proyectos">Gestión de proyectos</button>
+        </div>
+
+        <!-- TAB USUARIOS -->
+        <div class="admin-tab-content active" id="tab-usuarios">
+          <div class="admin-section-head">
+            <h2 class="admin-section-title">Usuarios registrados</h2>
+            <button class="btn-gold" id="btn-add-user">+ Agregar usuario</button>
+          </div>
+
+          <div class="admin-form-box" id="form-add-user" style="display:none">
+            <h4 style="color:var(--text-0);font-family:'Cormorant Garamond',serif;font-size:18px;margin-bottom:16px">Nuevo usuario</h4>
+            <div class="admin-form-grid">
+              <div class="form-group">
+                <label class="form-label">Nombre completo</label>
+                <input class="form-input" type="text" id="new-user-name" placeholder="Juan García"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Email</label>
+                <input class="form-input" type="email" id="new-user-email" placeholder="juan@email.com"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Contraseña inicial</label>
+                <input class="form-input" type="text" id="new-user-pass" placeholder="Contraseña temporal"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Rol</label>
+                <select class="form-input" id="new-user-role">
+                  <option value="client">Cliente</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex;gap:12px;margin-top:4px">
+              <button class="btn-gold" id="btn-save-user">Guardar usuario</button>
+              <button class="btn-ghost-light" id="btn-cancel-user">Cancelar</button>
+            </div>
+          </div>
+
+          <div class="admin-alert" id="user-alert" style="display:none"></div>
+          <table class="admin-table"><thead><tr>
+            <th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th>Acciones</th>
+          </tr></thead><tbody id="users-tbody"></tbody></table>
+        </div>
+
+        <!-- TAB PROYECTOS -->
+        <div class="admin-tab-content" id="tab-proyectos">
+          <div class="admin-section-head">
+            <h2 class="admin-section-title">Proyectos</h2>
+            <button class="btn-gold" id="btn-add-project">+ Nuevo proyecto</button>
+          </div>
+
+          <div class="admin-form-box" id="form-add-project" style="display:none">
+            <h4 style="color:var(--text-0);font-family:'Cormorant Garamond',serif;font-size:18px;margin-bottom:16px">Nuevo proyecto</h4>
+            <div class="admin-form-grid">
+              <div class="form-group">
+                <label class="form-label">Nombre del proyecto</label>
+                <input class="form-input" type="text" id="new-proj-name" placeholder="Casa García"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Subtítulo</label>
+                <input class="form-input" type="text" id="new-proj-sub" placeholder="Vivienda Unifamiliar"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Ubicación</label>
+                <input class="form-input" type="text" id="new-proj-loc" placeholder="Buenos Aires, Argentina"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Etapa</label>
+                <select class="form-input" id="new-proj-stage">
+                  <option>Anteproyecto</option>
+                  <option>Proyecto ejecutivo</option>
+                  <option>En obra</option>
+                  <option>Obra terminada</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Superficie total (m²)</label>
+                <input class="form-input" type="number" id="new-proj-surface" placeholder="256"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Superficie cubierta (m²)</label>
+                <input class="form-input" type="number" id="new-proj-covered" placeholder="198"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Ambientes</label>
+                <input class="form-input" type="number" id="new-proj-rooms" placeholder="7"/>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Baños</label>
+                <input class="form-input" type="number" id="new-proj-bathrooms" placeholder="3"/>
+              </div>
+              <div class="form-group" style="grid-column:1/-1">
+                <label class="form-label">Materiales principales</label>
+                <input class="form-input" type="text" id="new-proj-materials" placeholder="Hormigón visto, madera, vidrio"/>
+              </div>
+              <div class="form-group" style="grid-column:1/-1">
+                <label class="form-label">Asignar a cliente</label>
+                <select class="form-input" id="new-proj-client"></select>
+              </div>
+            </div>
+            <div style="display:flex;gap:12px;margin-top:4px">
+              <button class="btn-gold" id="btn-save-project">Guardar proyecto</button>
+              <button class="btn-ghost-light" id="btn-cancel-project">Cancelar</button>
+            </div>
+          </div>
+
+          <div class="admin-alert" id="proj-alert" style="display:none"></div>
+          <table class="admin-table"><thead><tr>
+            <th>Proyecto</th><th>Subtítulo</th><th>Ubicación</th><th>Etapa</th><th>Cliente</th><th>Acciones</th>
+          </tr></thead><tbody id="projects-tbody"></tbody></table>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="js/supabase-client.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
