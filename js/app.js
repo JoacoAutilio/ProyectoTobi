@@ -181,7 +181,7 @@ async function loadDashboard(profile) {
     document.getElementById('hero-stage').innerHTML =
       `<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1"><rect x="1" y="2" width="10" height="9" rx="1"/><path d="M1 5h10M4 1v2M8 1v2"/></svg> ${project.stage || ''}`;
 
-    await loadProjectFiles(project);
+    await loadProjectFiles(project, profile);
   if (project.surface)   document.getElementById('stat-surface').innerHTML    = `${project.surface} <span class="stat-unit">m²</span>`;
     if (project.covered)   document.getElementById('stat-covered').innerHTML    = `${project.covered} <span class="stat-unit">m²</span>`;
     if (project.rooms)     document.getElementById('stat-rooms').textContent     = project.rooms;
@@ -364,11 +364,11 @@ async function renderProjectsTable() {
     tr.innerHTML = `
       <td style="font-weight:400;color:var(--text-0)">${p.name}</td>
       <td style="color:var(--text-2)">${p.subtitle||'—'}</td>
-      <td style="color:var(--text-2)">${p.location||'—'}</td>
       <td><span class="badge badge-client">${p.stage||'—'}</span></td>
       <td>${clientName}</td>
       <td>
         <div class="table-actions">
+          <button class="btn-table" data-action="edit-project" data-id="${p.id}">Editar</button>
           <button class="btn-table danger" data-action="delete-project" data-id="${p.id}">Eliminar</button>
         </div>
       </td>
@@ -376,12 +376,18 @@ async function renderProjectsTable() {
     tbody.appendChild(tr);
   });
 
-  tbody.querySelectorAll('[data-action="delete-project"]').forEach(btn => {
+  tbody.querySelectorAll('[data-action]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (confirm('¿Eliminar este proyecto?')) {
-        const ok = await Projects.delete(btn.dataset.id);
-        if (ok) { await renderProjectsTable(); showAdminAlert('proj-alert', '✓ Proyecto eliminado.'); }
-        else showAdminAlert('proj-alert', '✗ Error al eliminar.', true);
+      const { action, id } = btn.dataset;
+      if (action === 'edit-project') {
+        await openEditProject(id);
+      }
+      if (action === 'delete-project') {
+        if (confirm('¿Eliminar este proyecto?')) {
+          const ok = await Projects.delete(id);
+          if (ok) { await renderProjectsTable(); showAdminAlert('proj-alert', '✓ Proyecto eliminado.'); }
+          else showAdminAlert('proj-alert', '✗ Error al eliminar.', true);
+        }
       }
     });
   });
@@ -883,4 +889,545 @@ function closeLightbox() {
 function moveLightbox(dir) {
   lightboxIndex = (lightboxIndex + dir + lightboxImages.length) % lightboxImages.length;
   document.getElementById('lb-img').src = lightboxImages[lightboxIndex];
+}
+
+
+/* ══════════════════════════════════════════
+   EDIT PROJECT PANEL — ADMIN
+══════════════════════════════════════════ */
+async function openEditProject(projId) {
+  const projects = await Projects.getAll();
+  const proj = projects.find(p => p.id === projId);
+  if (!proj) return;
+
+  // Mostrar panel
+  const panel = document.getElementById('edit-project-panel');
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Rellenar datos
+  document.getElementById('editing-proj-id').value       = proj.id;
+  document.getElementById('edit-panel-title').textContent = `Editando: ${proj.name}`;
+  document.getElementById('edit-proj-name').value         = proj.name || '';
+  document.getElementById('edit-proj-sub').value          = proj.subtitle || '';
+  document.getElementById('edit-proj-loc').value          = proj.location || '';
+  document.getElementById('edit-proj-materials').value    = proj.materials || '';
+  document.getElementById('edit-proj-surface').value      = proj.surface || '';
+  document.getElementById('edit-proj-covered').value      = proj.covered || '';
+  document.getElementById('edit-proj-rooms').value        = proj.rooms || '';
+  document.getElementById('edit-proj-bathrooms').value    = proj.bathrooms || '';
+  document.getElementById('edit-proj-kuula').value        = proj.kuula_url || '';
+
+  // Etapa
+  const stageEl = document.getElementById('edit-proj-stage');
+  Array.from(stageEl.options).forEach(o => o.selected = o.value === proj.stage);
+
+  // Cliente
+  const clientSel = document.getElementById('edit-proj-client');
+  const users = await Profiles.getAll();
+  const clients = users.filter(u => u.role === 'client');
+  clientSel.innerHTML = clients.map(c =>
+    `<option value="${c.id}" ${c.id === proj.client_id ? 'selected' : ''}>${c.name}</option>`
+  ).join('');
+
+  // Cargar archivos actuales
+  await loadEditCurrentFiles(proj.id);
+
+  // Init upload zones de edición
+  initEditUploadZones(proj.id);
+
+  // Eventos
+  document.getElementById('btn-close-edit').onclick = () => {
+    panel.style.display = 'none';
+    clearEditUploadZones();
+  };
+
+  document.getElementById('btn-update-project').onclick = () => updateProject(proj.id);
+  document.getElementById('btn-update-kuula').onclick    = () => updateKuula(proj.id);
+  document.getElementById('btn-upload-edit-files').onclick = () => uploadEditFiles(proj.id);
+}
+
+async function loadEditCurrentFiles(projId) {
+  // Renders actuales
+  const renders = await Storage.list(projId, 'renders');
+  const rendersEl = document.getElementById('edit-renders-current');
+  rendersEl.innerHTML = renders.length
+    ? renders.map(r => `
+        <div class="edit-file-item">
+          <img src="${r.url}" loading="lazy"/>
+          <button class="edit-file-delete" data-path="${r.path}" title="Eliminar">✕</button>
+        </div>
+      `).join('')
+    : '';
+
+  rendersEl.querySelectorAll('.edit-file-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('¿Eliminar este render?')) return;
+      const ok = await Storage.delete(btn.dataset.path);
+      if (ok) await loadEditCurrentFiles(projId);
+    });
+  });
+
+  // Planos actuales
+  const planos = await Storage.list(projId, 'planos');
+  const planosEl = document.getElementById('edit-planos-current');
+  planosEl.innerHTML = planos.length
+    ? planos.map(p => `
+        <div class="plano-preview-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <path d="M14 2v6h6"/>
+          </svg>
+          <span class="plano-name">${p.name}</span>
+          <a href="${p.url}" target="_blank" class="plano-status ok" style="text-decoration:none">Ver ↗</a>
+          <button class="btn-table danger" data-path="${p.path}" style="font-size:10px;padding:3px 8px">✕</button>
+        </div>
+      `).join('')
+    : '';
+
+  planosEl.querySelectorAll('[data-path]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('¿Eliminar este plano?')) return;
+      const ok = await Storage.delete(btn.dataset.path);
+      if (ok) await loadEditCurrentFiles(projId);
+    });
+  });
+}
+
+let editPendingRenders = [];
+let editPendingPlanos  = [];
+
+function initEditUploadZones(projId) {
+  editPendingRenders = [];
+  editPendingPlanos  = [];
+
+  // Renders
+  const ri = document.getElementById('edit-renders-input');
+  const rt = document.getElementById('edit-renders-trigger');
+  const rd = document.getElementById('edit-renders-drop');
+
+  rt.onclick = () => ri.click();
+  ri.onchange = e => addEditRenders(e.target.files);
+  rd.ondragover = e => { e.preventDefault(); rd.classList.add('drag-over'); };
+  rd.ondragleave = () => rd.classList.remove('drag-over');
+  rd.ondrop = e => { e.preventDefault(); rd.classList.remove('drag-over'); addEditRenders(e.dataTransfer.files); };
+
+  // Planos
+  const pi = document.getElementById('edit-planos-input');
+  const pt = document.getElementById('edit-planos-trigger');
+  const pd = document.getElementById('edit-planos-drop');
+
+  pt.onclick = () => pi.click();
+  pi.onchange = e => addEditPlanos(e.target.files);
+  pd.ondragover = e => { e.preventDefault(); pd.classList.add('drag-over'); };
+  pd.ondragleave = () => pd.classList.remove('drag-over');
+  pd.ondrop = e => { e.preventDefault(); pd.classList.remove('drag-over'); addEditPlanos(e.dataTransfer.files); };
+}
+
+function addEditRenders(files) {
+  const preview = document.getElementById('edit-renders-preview');
+  Array.from(files).forEach(file => {
+    if (!file.type.startsWith('image/')) return;
+    editPendingRenders.push(file);
+    const item = document.createElement('div');
+    item.className = 'preview-item';
+    item.innerHTML = `<img src="${URL.createObjectURL(file)}"/><div class="preview-status pending">Pendiente</div>`;
+    preview.appendChild(item);
+  });
+}
+
+function addEditPlanos(files) {
+  const preview = document.getElementById('edit-planos-preview');
+  Array.from(files).forEach(file => {
+    if (file.type !== 'application/pdf') return;
+    editPendingPlanos.push(file);
+    const item = document.createElement('div');
+    item.className = 'plano-preview-item';
+    item.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+        <path d="M14 2v6h6"/>
+      </svg>
+      <span class="plano-name">${file.name}</span>
+      <span class="plano-size">${(file.size/1024/1024).toFixed(1)} MB</span>
+      <span class="plano-status pending">Pendiente</span>
+    `;
+    preview.appendChild(item);
+  });
+}
+
+async function uploadEditFiles(projId) {
+  const btn = document.getElementById('btn-upload-edit-files');
+  btn.textContent = 'Subiendo...';
+  btn.disabled = true;
+
+  if (editPendingRenders.length > 0) {
+    const prog = document.getElementById('edit-renders-progress');
+    const bar  = document.getElementById('edit-renders-bar');
+    const txt  = document.getElementById('edit-renders-text');
+    prog.style.display = 'flex';
+    const items = document.querySelectorAll('#edit-renders-preview .preview-item');
+    for (let i = 0; i < editPendingRenders.length; i++) {
+      txt.textContent = `Subiendo render ${i+1} de ${editPendingRenders.length}...`;
+      bar.style.setProperty('--progress', `${(i/editPendingRenders.length)*100}%`);
+      const result = await Storage.upload(projId, 'renders', editPendingRenders[i]);
+      const status = items[i]?.querySelector('.preview-status');
+      if (status) { status.className = 'preview-status ' + (result.ok?'ok':'err'); status.textContent = result.ok?'✓':'Error'; }
+    }
+    bar.style.setProperty('--progress', '100%');
+    txt.textContent = `✓ ${editPendingRenders.length} renders subidos`;
+  }
+
+  if (editPendingPlanos.length > 0) {
+    const prog = document.getElementById('edit-planos-progress');
+    const txt  = document.getElementById('edit-planos-text');
+    prog.style.display = 'flex';
+    const items = document.querySelectorAll('#edit-planos-preview .plano-preview-item');
+    for (let i = 0; i < editPendingPlanos.length; i++) {
+      txt.textContent = `Subiendo plano ${i+1} de ${editPendingPlanos.length}...`;
+      const result = await Storage.upload(projId, 'planos', editPendingPlanos[i]);
+      const status = items[i]?.querySelector('.plano-status');
+      if (status) { status.className = 'plano-status ' + (result.ok?'ok':'err'); status.textContent = result.ok?'✓ Subido':'Error'; }
+    }
+    txt.textContent = `✓ ${editPendingPlanos.length} planos subidos`;
+  }
+
+  btn.textContent = 'Subir archivos seleccionados';
+  btn.disabled = false;
+
+  // Recargar lista de archivos actuales
+  await loadEditCurrentFiles(projId);
+  clearEditUploadZones();
+  showAdminAlert('proj-alert', '✓ Archivos subidos correctamente.');
+}
+
+async function updateProject(projId) {
+  const btn = document.getElementById('btn-update-project');
+  btn.textContent = 'Guardando...';
+  btn.disabled = true;
+
+  const { error } = await db
+    .from('projects')
+    .update({
+      name:       document.getElementById('edit-proj-name').value.trim(),
+      subtitle:   document.getElementById('edit-proj-sub').value.trim(),
+      location:   document.getElementById('edit-proj-loc').value.trim(),
+      stage:      document.getElementById('edit-proj-stage').value,
+      client_id:  document.getElementById('edit-proj-client').value,
+      surface:    document.getElementById('edit-proj-surface').value || null,
+      covered:    document.getElementById('edit-proj-covered').value || null,
+      rooms:      document.getElementById('edit-proj-rooms').value || null,
+      bathrooms:  document.getElementById('edit-proj-bathrooms').value || null,
+      materials:  document.getElementById('edit-proj-materials').value.trim(),
+      updated_at: new Date().toLocaleDateString('es-AR'),
+    })
+    .eq('id', projId);
+
+  btn.textContent = 'Guardar cambios';
+  btn.disabled = false;
+
+  if (error) { showAdminAlert('proj-alert', '✗ Error al guardar: ' + error.message, true); return; }
+  await renderProjectsTable();
+  showAdminAlert('proj-alert', '✓ Proyecto actualizado correctamente.');
+}
+
+async function updateKuula(projId) {
+  const url = document.getElementById('edit-proj-kuula').value.trim();
+  const ok = await Projects.updateKuula(projId, url);
+  if (ok) showAdminAlert('proj-alert', '✓ Tour 360° guardado.');
+  else showAdminAlert('proj-alert', '✗ Error al guardar Kuula.', true);
+}
+
+function clearEditUploadZones() {
+  editPendingRenders = [];
+  editPendingPlanos  = [];
+  ['edit-renders-preview','edit-planos-preview'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '';
+  });
+  ['edit-renders-input','edit-planos-input'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['edit-renders-progress','edit-planos-progress'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+}
+
+
+/* ══════════════════════════════════════════
+   DASHBOARD — BOTONES SUBIDA ADMIN
+══════════════════════════════════════════ */
+async function loadProjectFiles(project, profile) {
+  if (!project) return;
+  const isAdmin = profile?.role === 'admin';
+
+  // Marcar el dashboard como admin para mostrar botones
+  const dash = document.getElementById('screen-dashboard');
+  if (isAdmin) dash.classList.add('is-admin');
+  else dash.classList.remove('is-admin');
+
+  // ── Renders ──
+  const renders = await Storage.list(project.id, 'renders');
+  const rendersPanel = document.querySelector('#screen-dashboard .sections-grid .section-panel:nth-child(1)');
+  const rendersGrid  = document.getElementById('renders-grid');
+
+  // Botón subir renders (solo admin)
+  if (isAdmin) {
+    const head = rendersPanel?.querySelector('.section-head');
+    if (head && !head.querySelector('.section-upload-btn')) {
+      const uploadBtn = document.createElement('button');
+      uploadBtn.className = 'section-upload-btn';
+      uploadBtn.textContent = '+ Subir renders';
+      uploadBtn.addEventListener('click', () => openDashUploadModal('renders', project.id));
+      head.appendChild(uploadBtn);
+    }
+  }
+
+  if (rendersGrid) {
+    if (renders.length > 0) {
+      rendersGrid.className = 'renders-viewer-grid';
+      rendersGrid.innerHTML = `
+        <div class="render-img-main" data-idx="0">
+          <img src="${renders[0].url}" alt="Render principal" loading="lazy"/>
+        </div>
+        ${renders.slice(1,5).map((r,i) => `
+          <div class="render-img-thumb" data-idx="${i+1}">
+            <img src="${r.url}" alt="Render ${i+2}" loading="lazy"/>
+          </div>
+        `).join('')}
+      `;
+      initLightbox(renders.map(r => r.url));
+    } else {
+      rendersGrid.className = '';
+      rendersGrid.innerHTML = '<div class="render-main render-ph r1" style="display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-4);letter-spacing:1px">Sin renders aún</div>';
+    }
+  }
+
+  // ── Tour 360° Kuula ──
+  const tourPanel  = document.querySelector('#screen-dashboard .sections-grid .section-panel:nth-child(2)');
+  const tourViewer = tourPanel?.querySelector('.tour-viewer');
+
+  if (isAdmin) {
+    const head = tourPanel?.querySelector('.section-head');
+    if (head && !head.querySelector('.section-upload-btn')) {
+      const uploadBtn = document.createElement('button');
+      uploadBtn.className = 'section-upload-btn';
+      uploadBtn.textContent = '+ Tour 360°';
+      uploadBtn.addEventListener('click', () => openDashUploadModal('tour', project.id));
+      head.appendChild(uploadBtn);
+    }
+  }
+
+  if (project.kuula_url && tourViewer) {
+    tourViewer.outerHTML = `<div class="tour-embed"><iframe src="${project.kuula_url}" allowfullscreen allow="xr-spatial-tracking"></iframe></div>`;
+  }
+
+  // ── Planos ──
+  const planos     = await Storage.list(project.id, 'planos');
+  const planosPanel = document.querySelector('#screen-dashboard .sections-grid .section-panel:nth-child(3)');
+  const planosWrap  = planosPanel?.querySelector('.planos-wrap');
+
+  if (isAdmin) {
+    const head = planosPanel?.querySelector('.section-head');
+    if (head && !head.querySelector('.section-upload-btn')) {
+      const uploadBtn = document.createElement('button');
+      uploadBtn.className = 'section-upload-btn';
+      uploadBtn.textContent = '+ Subir planos';
+      uploadBtn.addEventListener('click', () => openDashUploadModal('planos', project.id));
+      head.appendChild(uploadBtn);
+    }
+  }
+
+  if (planosWrap) {
+    if (planos.length > 0) {
+      planosWrap.innerHTML = `
+        <ul class="planos-list" id="planos-tabs">
+          ${planos.map((p,i) => `
+            <li class="plano-item ${i===0?'active':''}" data-url="${p.url}" data-name="${p.name}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                <path d="M14 2v6h6"/>
+              </svg>
+              ${p.name.replace('.pdf','').replace(/-/g,' ')}
+            </li>
+          `).join('')}
+        </ul>
+        <div class="plano-viewer-frame" id="plano-frame">
+          <iframe src="${planos[0].url}#toolbar=0" title="Plano"></iframe>
+          <a class="plano-download-btn" href="${planos[0].url}" download target="_blank">Descargar ↓</a>
+        </div>
+      `;
+      document.querySelectorAll('.plano-item').forEach(item => {
+        item.addEventListener('click', () => {
+          document.querySelectorAll('.plano-item').forEach(i => i.classList.remove('active'));
+          item.classList.add('active');
+          document.getElementById('plano-frame').innerHTML = `
+            <iframe src="${item.dataset.url}#toolbar=0" title="Plano"></iframe>
+            <a class="plano-download-btn" href="${item.dataset.url}" download target="_blank">Descargar ↓</a>
+          `;
+        });
+      });
+    }
+  }
+}
+
+
+/* ══════════════════════════════════════════
+   DASHBOARD UPLOAD MODAL
+══════════════════════════════════════════ */
+let dashUploadType    = null;
+let dashUploadProjId  = null;
+let dashPendingFiles  = [];
+
+function openDashUploadModal(type, projId) {
+  dashUploadType   = type;
+  dashUploadProjId = projId;
+  dashPendingFiles = [];
+
+  // Crear modal si no existe
+  if (!document.getElementById('dash-upload-modal')) {
+    const overlay = document.createElement('div');
+    overlay.id = 'dash-upload-modal';
+    overlay.className = 'upload-modal-overlay';
+    overlay.innerHTML = `
+      <div class="upload-modal">
+        <div class="upload-modal-header">
+          <h3 class="upload-modal-title" id="dash-modal-title">Subir archivos</h3>
+          <button class="btn-ghost-light" id="dash-modal-close">✕</button>
+        </div>
+        <div id="dash-modal-body"></div>
+        <div style="display:flex;gap:12px;margin-top:20px">
+          <button class="btn-gold" id="dash-modal-upload">Subir archivos</button>
+          <button class="btn-ghost-light" id="dash-modal-cancel">Cancelar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    document.getElementById('dash-modal-close').addEventListener('click', closeDashUploadModal);
+    document.getElementById('dash-modal-cancel').addEventListener('click', closeDashUploadModal);
+    document.getElementById('dash-modal-upload').addEventListener('click', doDashUpload);
+  }
+
+  const titles = { renders: '+ Subir Renders', tour: '+ Tour 360° Kuula', planos: '+ Subir Planos' };
+  document.getElementById('dash-modal-title').textContent = titles[type];
+
+  const body = document.getElementById('dash-modal-body');
+
+  if (type === 'tour') {
+    body.innerHTML = `
+      <div class="form-group">
+        <label class="form-label">Link embed de Kuula</label>
+        <input class="form-input" type="text" id="dash-kuula-input" placeholder="https://kuula.co/share/XXXXX?fs=1&vr=0"/>
+        <p style="font-size:10px;color:var(--text-4);margin-top:8px">En Kuula → tu tour → Share → Embed → copiá la URL del src del iframe</p>
+      </div>
+    `;
+  } else {
+    const accept = type === 'renders' ? 'image/jpeg,image/png,image/webp' : 'application/pdf';
+    const hint   = type === 'renders' ? 'JPG, PNG · Máx 10MB' : 'PDF · Máx 20MB';
+    body.innerHTML = `
+      <input type="file" id="dash-file-input" multiple accept="${accept}" style="display:none"/>
+      <div class="upload-zone-inner" id="dash-drop-area" style="border:0.5px dashed var(--line);border-radius:var(--radius);margin-bottom:10px">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+        </svg>
+        <p>Arrastrá o <span class="upload-link" id="dash-file-trigger">seleccioná archivos</span></p>
+        <p class="upload-hint">${hint}</p>
+      </div>
+      <div id="dash-files-preview"></div>
+      <div class="upload-progress" id="dash-upload-progress" style="display:none">
+        <div class="upload-progress-bar" id="dash-upload-bar"></div>
+        <span id="dash-upload-text">Subiendo...</span>
+      </div>
+    `;
+
+    setTimeout(() => {
+      const fi = document.getElementById('dash-file-input');
+      const ft = document.getElementById('dash-file-trigger');
+      const da = document.getElementById('dash-drop-area');
+      ft.addEventListener('click', () => fi.click());
+      fi.addEventListener('change', e => addDashFiles(e.target.files));
+      da.addEventListener('dragover', e => { e.preventDefault(); da.classList.add('drag-over'); });
+      da.addEventListener('dragleave', () => da.classList.remove('drag-over'));
+      da.addEventListener('drop', e => { e.preventDefault(); da.classList.remove('drag-over'); addDashFiles(e.dataTransfer.files); });
+    }, 50);
+  }
+
+  document.getElementById('dash-upload-modal').classList.add('open');
+}
+
+function addDashFiles(files) {
+  const preview = document.getElementById('dash-files-preview');
+  Array.from(files).forEach(file => {
+    dashPendingFiles.push(file);
+    if (dashUploadType === 'renders') {
+      const item = document.createElement('div');
+      item.className = 'preview-item';
+      item.style.cssText = 'display:inline-block;width:80px;height:60px;margin:3px;';
+      item.innerHTML = `<img src="${URL.createObjectURL(file)}" style="width:100%;height:100%;object-fit:cover;border-radius:2px"/>`;
+      preview.appendChild(item);
+    } else {
+      const item = document.createElement('div');
+      item.className = 'plano-preview-item';
+      item.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <path d="M14 2v6h6"/>
+        </svg>
+        <span class="plano-name">${file.name}</span>
+        <span class="plano-size">${(file.size/1024/1024).toFixed(1)} MB</span>
+      `;
+      preview.appendChild(item);
+    }
+  });
+}
+
+async function doDashUpload() {
+  const btn = document.getElementById('dash-modal-upload');
+  btn.textContent = 'Subiendo...';
+  btn.disabled = true;
+
+  if (dashUploadType === 'tour') {
+    const url = document.getElementById('dash-kuula-input').value.trim();
+    if (!url) { alert('Ingresá el link de Kuula.'); btn.textContent = 'Subir archivos'; btn.disabled = false; return; }
+    const ok = await Projects.updateKuula(dashUploadProjId, url);
+    if (ok) {
+      closeDashUploadModal();
+      // Recargar dashboard
+      const user = await Auth.getCurrentUser();
+      const profile = await Profiles.getOwn(user.id);
+      await loadDashboard(profile);
+    }
+    return;
+  }
+
+  if (dashPendingFiles.length === 0) { alert('Seleccioná al menos un archivo.'); btn.textContent = 'Subir archivos'; btn.disabled = false; return; }
+
+  const prog = document.getElementById('dash-upload-progress');
+  const bar  = document.getElementById('dash-upload-bar');
+  const txt  = document.getElementById('dash-upload-text');
+  prog.style.display = 'flex';
+
+  for (let i = 0; i < dashPendingFiles.length; i++) {
+    txt.textContent = `Subiendo ${i+1} de ${dashPendingFiles.length}...`;
+    bar.style.setProperty('--progress', `${(i/dashPendingFiles.length)*100}%`);
+    await Storage.upload(dashUploadProjId, dashUploadType, dashPendingFiles[i]);
+  }
+
+  bar.style.setProperty('--progress', '100%');
+  txt.textContent = `✓ Listo`;
+
+  setTimeout(async () => {
+    closeDashUploadModal();
+    const user = await Auth.getCurrentUser();
+    const profile = await Profiles.getOwn(user.id);
+    await loadDashboard(profile);
+  }, 800);
+}
+
+function closeDashUploadModal() {
+  const modal = document.getElementById('dash-upload-modal');
+  if (modal) modal.classList.remove('open');
+  dashPendingFiles = [];
 }

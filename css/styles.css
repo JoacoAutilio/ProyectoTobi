@@ -1519,3 +1519,153 @@ select.form-input { cursor: pointer; }
   .lightbox-prev { left: 8px; }
   .lightbox-next { right: 8px; }
 }
+
+
+/* ══════════════════════════════════════════
+   EDIT PROJECT PANEL
+══════════════════════════════════════════ */
+.edit-panel {
+  margin-top: 24px;
+  background: var(--bg-1);
+  border: 0.5px solid var(--gold-bdr);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+
+.edit-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 0.5px solid var(--line);
+}
+
+.edit-panel-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--text-0);
+}
+
+.edit-files-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.edit-files-grid:empty::after {
+  content: 'Sin renders aún';
+  font-size: 11px;
+  color: var(--text-4);
+  letter-spacing: 0.5px;
+  grid-column: 1/-1;
+  padding: 12px 0;
+}
+
+.edit-file-item {
+  position: relative;
+  aspect-ratio: 4/3;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--bg-2);
+}
+
+.edit-file-item img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+
+.edit-file-delete {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 20px; height: 20px;
+  background: rgba(180,60,60,0.85);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.edit-file-item:hover .edit-file-delete { opacity: 1; }
+
+.edit-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.edit-files-list:empty::after {
+  content: 'Sin planos aún';
+  font-size: 11px;
+  color: var(--text-4);
+  letter-spacing: 0.5px;
+  display: block;
+  padding: 12px 0;
+}
+
+/* Dashboard upload buttons (solo admin) */
+.section-upload-btn {
+  display: none;
+  background: transparent;
+  border: 0.5px solid var(--gold-bdr);
+  color: var(--gold);
+  font-size: 10px;
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  font-family: 'Jost', sans-serif;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.section-upload-btn:hover { background: var(--gold-dim); }
+.is-admin .section-upload-btn { display: inline-block; }
+
+/* Upload modal */
+.upload-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 500;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.upload-modal-overlay.open { display: flex; }
+
+.upload-modal {
+  background: var(--bg-1);
+  border: 0.5px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.upload-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.upload-modal-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  color: var(--text-0);
+}
+
+@media (max-width: 600px) {
+  .edit-files-grid { grid-template-columns: repeat(3, 1fr); }
+  .edit-panel { padding: 16px; }
+}
