@@ -1008,3 +1008,139 @@ select.form-input { cursor: pointer; }
   border-color: var(--danger-bdr) !important;
   color: var(--danger) !important;
 }
+
+/* ══════════════════════════════════════════
+   RESPONSIVE MOBILE COMPLETO
+══════════════════════════════════════════ */
+
+/* Elementos móvil ocultos por defecto en desktop */
+.mobile-nav    { display: none; }
+.mobile-header { display: none; }
+
+@media (max-width: 900px) {
+  .login-left { display: none; }
+  .login-right { width: 100%; padding: 48px 32px; }
+  .sections-grid { grid-template-columns: 1fr; }
+  .section-panel { border-right: none; border-bottom: 0.5px solid var(--line); }
+  .stats-grid { grid-template-columns: repeat(3, 1fr); }
+  .info-section { grid-template-columns: 1fr; }
+  .admin-form-grid { grid-template-columns: 1fr; }
+  .admin-table { font-size: 11px; }
+}
+
+@media (max-width: 600px) {
+
+  /* Sidebar oculto */
+  .sidebar { display: none !important; }
+
+  /* App layout columna */
+  .app-layout { flex-direction: column; }
+
+  /* Espacio para bottom nav */
+  .main-content { padding-bottom: 70px; }
+
+  /* Header móvil */
+  .mobile-header {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    background: var(--bg-1);
+    border-bottom: 0.5px solid var(--line);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .mobile-header-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--gold);
+    text-transform: uppercase;
+  }
+  .mobile-logout {
+    font-size: 10px;
+    color: var(--text-3);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    background: none;
+    border: 0.5px solid var(--line);
+    padding: 5px 10px;
+    border-radius: var(--radius);
+    font-family: 'Jost', sans-serif;
+  }
+
+  /* Bottom nav */
+  .mobile-nav {
+    display: flex !important;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--bg-1);
+    border-top: 0.5px solid var(--line);
+    z-index: 100;
+    height: 60px;
+  }
+  .mobile-nav a {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font-size: 8px;
+    letter-spacing: 0.5px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    border-top: 2px solid transparent;
+    transition: all 0.15s;
+    padding: 6px 2px;
+  }
+  .mobile-nav a.active { color: var(--gold); border-top-color: var(--gold); }
+  .mobile-nav svg { width: 16px; height: 16px; }
+
+  /* Hero */
+  .project-hero { height: auto; min-height: 200px; }
+  .hero-title { font-size: 30px; }
+  .hero-subtitle { font-size: 14px; }
+  .hero-body { padding: 0 18px 24px; }
+  .hero-badge { top: 12px; left: 18px; font-size: 9px; }
+  .notification-pill { display: none; }
+
+  /* Secciones */
+  .section-panel { padding: 16px; }
+  .section-title { font-size: 17px; }
+  .section-head { margin-bottom: 12px; }
+
+  /* Stats */
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .info-section { padding: 16px; gap: 12px; }
+
+  /* Planos */
+  .planos-wrap { flex-direction: column; }
+  .planos-tabs { flex-direction: row; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+  .plano-tab { padding: 5px 10px; font-size: 10px; }
+  .plano-preview { min-height: 80px; }
+
+  /* Admin */
+  .admin-tabs { padding: 0 12px; overflow-x: auto; white-space: nowrap; }
+  .admin-tab { padding: 12px 14px; font-size: 11px; }
+  .admin-tab-content { padding: 14px; }
+  .admin-section-head { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .admin-section-title { font-size: 20px; }
+  .admin-form-box { padding: 14px; }
+  .admin-form-grid { grid-template-columns: 1fr; gap: 10px; }
+  .admin-banner { font-size: 10px; padding: 7px 14px; flex-wrap: wrap; }
+  .admin-banner.always-show { font-size: 10px; }
+
+  /* Tabla — scroll horizontal */
+  #users-table, #projects-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Register */
+  .register-wrap { padding: 36px 20px; }
+
+  /* Login */
+  .login-right { padding: 36px 22px; }
+}

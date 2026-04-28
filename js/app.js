@@ -164,6 +164,7 @@ async function doRegister() {
 ══════════════════════════════════════════ */
 async function loadDashboard(profile) {
   document.getElementById('dash-avatar').textContent = profile.initials || '??';
+  initMobileNav(profile);
   document.getElementById('dash-name').textContent   = profile.name;
   document.getElementById('dash-role').textContent   = profile.role === 'admin' ? 'ADMINISTRADOR' : 'CLIENTE';
   document.getElementById('admin-banner').style.display = profile.role === 'admin' ? 'flex' : 'none';
@@ -228,6 +229,7 @@ function bindDashboardEvents() {
    PANEL ADMIN
 ══════════════════════════════════════════ */
 async function loadAdminPanel() {
+  initAdminMobileNav();
   await renderUsersTable();
   await renderProjectsTable();
   await populateClientSelect();
@@ -489,4 +491,101 @@ function showAdminAlert(id, msg, isError = false) {
   el.style.color = isError ? 'var(--danger)' : 'var(--success)';
   el.style.display = 'block';
   setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+
+
+/* ══════════════════════════════════════════
+   MOBILE NAV
+══════════════════════════════════════════ */
+function initMobileNav(profile) {
+  // Logout móvil
+  const mobileLogout = document.getElementById('btn-logout-mobile');
+  if (mobileLogout) {
+    mobileLogout.addEventListener('click', doLogout);
+  }
+
+  // Nombre en header móvil
+  const mobileName = document.getElementById('mobile-user-name');
+  if (mobileName) mobileName.textContent = profile.name.split(' ')[0];
+
+  // Bottom nav — scroll a sección
+  const mobileNav = document.getElementById('mobile-nav');
+  if (!mobileNav) return;
+
+  const sectionMap = {
+    'inicio':   '.project-hero',
+    'renders':  '.sections-grid .section-panel:nth-child(1)',
+    'tour':     '.sections-grid .section-panel:nth-child(2)',
+    'planos':   '.sections-grid .section-panel:nth-child(3)',
+    'info':     '.info-section',
+  };
+
+  mobileNav.querySelectorAll('a').forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      mobileNav.querySelectorAll('a').forEach(l => l.classList.remove('active'));
+      link.classList.add('active');
+
+      const section = link.dataset.mobileSection;
+      const target = document.querySelector(sectionMap[section]);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+}
+
+
+/* ══════════════════════════════════════════
+   MOBILE NAV — ADMIN
+══════════════════════════════════════════ */
+function initAdminMobileNav() {
+  // Logout móvil admin
+  const mobileLogout = document.getElementById('btn-logout-admin-mobile');
+  if (mobileLogout) mobileLogout.addEventListener('click', doLogout);
+
+  // Nav — Dashboard
+  const navDash = document.getElementById('admin-nav-dash');
+  if (navDash) {
+    navDash.addEventListener('click', async e => {
+      e.preventDefault();
+      setAdminMobileActive(navDash);
+      const user = await Auth.getCurrentUser();
+      if (user) {
+        const profile = await Profiles.getOwn(user.id);
+        if (profile) { await loadDashboard(profile); showScreen('dashboard'); }
+      }
+    });
+  }
+
+  // Nav — Usuarios
+  const navUsuarios = document.getElementById('admin-nav-usuarios');
+  if (navUsuarios) {
+    navUsuarios.addEventListener('click', e => {
+      e.preventDefault();
+      setAdminMobileActive(navUsuarios);
+      // Activar tab usuarios
+      document.querySelectorAll('.admin-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'usuarios'));
+      document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-usuarios'));
+      document.getElementById('tab-usuarios').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  // Nav — Proyectos
+  const navProyectos = document.getElementById('admin-nav-proyectos');
+  if (navProyectos) {
+    navProyectos.addEventListener('click', e => {
+      e.preventDefault();
+      setAdminMobileActive(navProyectos);
+      // Activar tab proyectos
+      document.querySelectorAll('.admin-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'proyectos'));
+      document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-proyectos'));
+      document.getElementById('tab-proyectos').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+}
+
+function setAdminMobileActive(el) {
+  document.querySelectorAll('#admin-mobile-nav a').forEach(a => a.classList.remove('active'));
+  el.classList.add('active');
 }
