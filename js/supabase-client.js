@@ -125,13 +125,15 @@ const Projects = {
   async getAll() {
     const { data, error } = await db
       .from('projects')
-      .select(`
-        *,
-        profiles ( name, email )
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
     if (error) return [];
-    return data;
+    // Enriquecer con nombre del cliente sin JOIN
+    const profiles = await Profiles.getAll();
+    return (data || []).map(p => ({
+      ...p,
+      profiles: profiles.find(u => u.id === p.client_id) || null
+    }));
   },
 
   async create(projData) {
@@ -163,4 +165,62 @@ const Projects = {
       .eq('id', projId);
     return !error;
   }
+};
+
+
+/* ══════════════════════════════════════════
+   STORAGE — ARCHIVOS
+══════════════════════════════════════════ */
+const Storage = {
+
+  // Subir un archivo al bucket
+  async upload(projectId, type, file) {
+    const ext  = file.name.split('.').pop();
+    const path = `${projectId}/${type}/${Date.now()}-${file.name.replace(/\s/g, '_')}`;
+    const { data, error } = await db.storage
+      .from('project-files')
+      .upload(path, file, { upsert: false, contentType: file.type });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, path: data.path };
+  },
+
+  // Obtener URL pública de un archivo
+  getPublicUrl(path) {
+    const { data } = db.storage
+      .from('project-files')
+      .getPublicUrl(path);
+    return data.publicUrl;
+  },
+
+  // Listar archivos de un proyecto por tipo
+  async list(projectId, type) {
+    const { data, error } = await db.storage
+      .from('project-files')
+      .list(`${projectId}/${type}`, { sortBy: { column: 'created_at', order: 'asc' } });
+    if (error || !data) return [];
+    return data.map(f => ({
+      name: f.name,
+      path: `${projectId}/${type}/${f.name}`,
+      url:  Storage.getPublicUrl(`${projectId}/${type}/${f.name}`)
+    }));
+  },
+
+  // Eliminar archivo
+  async delete(path) {
+    const { error } = await db.storage
+      .from('project-files')
+      .remove([path]);
+    return !error;
+  }
+};
+
+/* ══════════════════════════════════════════
+   PROYECTOS — guardar kuula url
+══════════════════════════════════════════ */
+Projects.updateKuula = async function(projId, kuulaUrl) {
+  const { error } = await db
+    .from('projects')
+    .update({ kuula_url: kuulaUrl })
+    .eq('id', projId);
+  return !error;
 };

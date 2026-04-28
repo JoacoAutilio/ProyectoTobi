@@ -181,7 +181,8 @@ async function loadDashboard(profile) {
     document.getElementById('hero-stage').innerHTML =
       `<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1"><rect x="1" y="2" width="10" height="9" rx="1"/><path d="M1 5h10M4 1v2M8 1v2"/></svg> ${project.stage || ''}`;
 
-    if (project.surface)   document.getElementById('stat-surface').innerHTML    = `${project.surface} <span class="stat-unit">m²</span>`;
+    await loadProjectFiles(project);
+  if (project.surface)   document.getElementById('stat-surface').innerHTML    = `${project.surface} <span class="stat-unit">m²</span>`;
     if (project.covered)   document.getElementById('stat-covered').innerHTML    = `${project.covered} <span class="stat-unit">m²</span>`;
     if (project.rooms)     document.getElementById('stat-rooms').textContent     = project.rooms;
     if (project.bathrooms) document.getElementById('stat-bathrooms').textContent = project.bathrooms;
@@ -230,6 +231,7 @@ function bindDashboardEvents() {
 ══════════════════════════════════════════ */
 async function loadAdminPanel() {
   initAdminMobileNav();
+  initUploadZones();
   await renderUsersTable();
   await renderProjectsTable();
   await populateClientSelect();
@@ -451,10 +453,23 @@ async function saveNewProject() {
 
   if (!result.ok) { alert('Error: ' + result.error); return; }
 
+  // Guardar URL de Kuula si se ingresó
+  const kuulaUrl = document.getElementById('new-proj-kuula').value.trim();
+  if (kuulaUrl && result.project) {
+    await Projects.updateKuula(result.project.id, kuulaUrl);
+  }
+
+  // Subir archivos
+  if (result.project && (pendingRenders.length > 0 || pendingPlanos.length > 0)) {
+    btn.textContent = 'Subiendo archivos...';
+    await uploadProjectFiles(result.project.id);
+  }
+
   document.getElementById('form-add-project').style.display = 'none';
   document.getElementById('btn-add-project').style.display  = 'inline-block';
-  ['new-proj-name','new-proj-sub','new-proj-loc','new-proj-surface','new-proj-covered','new-proj-rooms','new-proj-bathrooms','new-proj-materials']
-    .forEach(id => document.getElementById(id).value = '');
+  ['new-proj-name','new-proj-sub','new-proj-loc','new-proj-surface','new-proj-covered','new-proj-rooms','new-proj-bathrooms','new-proj-materials','new-proj-kuula']
+    .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  clearUploadZones();
 
   await renderProjectsTable();
   showAdminAlert('proj-alert', `✓ Proyecto "${name}" creado correctamente.`);
@@ -588,4 +603,284 @@ function initAdminMobileNav() {
 function setAdminMobileActive(el) {
   document.querySelectorAll('#admin-mobile-nav a').forEach(a => a.classList.remove('active'));
   el.classList.add('active');
+}
+
+
+/* ══════════════════════════════════════════
+   UPLOAD — RENDERS
+══════════════════════════════════════════ */
+let pendingRenders = []; // archivos a subir
+let pendingPlanos  = [];
+let currentProjectId = null;
+
+function initUploadZones() {
+  // ── Renders ──
+  const rendersInput   = document.getElementById('renders-input');
+  const rendersTrigger = document.getElementById('renders-trigger');
+  const rendersArea    = document.getElementById('renders-drop-area');
+
+  if (!rendersInput) return;
+
+  rendersTrigger.addEventListener('click', () => rendersInput.click());
+  rendersInput.addEventListener('change', e => addRenderFiles(e.target.files));
+
+  rendersArea.addEventListener('dragover', e => { e.preventDefault(); rendersArea.classList.add('drag-over'); });
+  rendersArea.addEventListener('dragleave', () => rendersArea.classList.remove('drag-over'));
+  rendersArea.addEventListener('drop', e => {
+    e.preventDefault();
+    rendersArea.classList.remove('drag-over');
+    addRenderFiles(e.dataTransfer.files);
+  });
+
+  // ── Planos ──
+  const planosInput   = document.getElementById('planos-input');
+  const planosTrigger = document.getElementById('planos-trigger');
+  const planosArea    = document.getElementById('planos-drop-area');
+
+  planosTrigger.addEventListener('click', () => planosInput.click());
+  planosInput.addEventListener('change', e => addPlanoFiles(e.target.files));
+
+  planosArea.addEventListener('dragover', e => { e.preventDefault(); planosArea.classList.add('drag-over'); });
+  planosArea.addEventListener('dragleave', () => planosArea.classList.remove('drag-over'));
+  planosArea.addEventListener('drop', e => {
+    e.preventDefault();
+    planosArea.classList.remove('drag-over');
+    addPlanoFiles(e.dataTransfer.files);
+  });
+}
+
+function addRenderFiles(files) {
+  const preview = document.getElementById('renders-preview');
+  Array.from(files).forEach(file => {
+    if (!file.type.startsWith('image/')) return;
+    pendingRenders.push(file);
+
+    const item = document.createElement('div');
+    item.className = 'preview-item';
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+    const status = document.createElement('div');
+    status.className = 'preview-status pending';
+    status.textContent = 'Pendiente';
+    item.appendChild(img);
+    item.appendChild(status);
+    preview.appendChild(item);
+  });
+}
+
+function addPlanoFiles(files) {
+  const preview = document.getElementById('planos-preview');
+  Array.from(files).forEach(file => {
+    if (file.type !== 'application/pdf') return;
+    pendingPlanos.push(file);
+
+    const item = document.createElement('div');
+    item.className = 'plano-preview-item';
+    item.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+        <path d="M14 2v6h6"/>
+      </svg>
+      <span class="plano-name">${file.name}</span>
+      <span class="plano-size">${(file.size/1024/1024).toFixed(1)} MB</span>
+      <span class="plano-status pending">Pendiente</span>
+    `;
+    preview.appendChild(item);
+  });
+}
+
+async function uploadProjectFiles(projectId) {
+  // Subir renders
+  if (pendingRenders.length > 0) {
+    const prog = document.getElementById('renders-progress');
+    const progBar = document.getElementById('renders-progress-bar');
+    const progText = document.getElementById('renders-progress-text');
+    prog.style.display = 'flex';
+
+    const items = document.querySelectorAll('#renders-preview .preview-item');
+    for (let i = 0; i < pendingRenders.length; i++) {
+      progText.textContent = `Subiendo render ${i+1} de ${pendingRenders.length}...`;
+      progBar.style.setProperty('--progress', `${((i)/pendingRenders.length*100)}%`);
+      const result = await Storage.upload(projectId, 'renders', pendingRenders[i]);
+      const status = items[i]?.querySelector('.preview-status');
+      if (status) {
+        status.className = 'preview-status ' + (result.ok ? 'ok' : 'err');
+        status.textContent = result.ok ? '✓' : 'Error';
+      }
+    }
+    progBar.style.setProperty('--progress', '100%');
+    progText.textContent = `✓ ${pendingRenders.length} renders subidos`;
+  }
+
+  // Subir planos
+  if (pendingPlanos.length > 0) {
+    const prog = document.getElementById('planos-progress');
+    const progText = document.getElementById('planos-progress-text');
+    prog.style.display = 'flex';
+
+    const items = document.querySelectorAll('#planos-preview .plano-preview-item');
+    for (let i = 0; i < pendingPlanos.length; i++) {
+      progText.textContent = `Subiendo plano ${i+1} de ${pendingPlanos.length}...`;
+      const result = await Storage.upload(projectId, 'planos', pendingPlanos[i]);
+      const status = items[i]?.querySelector('.plano-status');
+      if (status) {
+        status.className = 'plano-status ' + (result.ok ? 'ok' : 'err');
+        status.textContent = result.ok ? '✓ Subido' : 'Error';
+      }
+    }
+    progText.textContent = `✓ ${pendingPlanos.length} planos subidos`;
+  }
+
+  pendingRenders = [];
+  pendingPlanos  = [];
+}
+
+function clearUploadZones() {
+  pendingRenders = [];
+  pendingPlanos  = [];
+  const rp = document.getElementById('renders-preview');
+  const pp = document.getElementById('planos-preview');
+  if (rp) rp.innerHTML = '';
+  if (pp) pp.innerHTML = '';
+  const ri = document.getElementById('renders-input');
+  const pi = document.getElementById('planos-input');
+  if (ri) ri.value = '';
+  if (pi) pi.value = '';
+  ['renders-progress','planos-progress'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+}
+
+
+/* ══════════════════════════════════════════
+   DASHBOARD — CARGAR ARCHIVOS DEL PROYECTO
+══════════════════════════════════════════ */
+async function loadProjectFiles(project) {
+  if (!project) return;
+
+  // ── Renders ──
+  const renders = await Storage.list(project.id, 'renders');
+  const rendersGrid = document.getElementById('renders-grid');
+  if (rendersGrid) {
+    if (renders.length > 0) {
+      rendersGrid.className = 'renders-viewer-grid';
+      rendersGrid.innerHTML = `
+        <div class="render-img-main" data-idx="0">
+          <img src="${renders[0].url}" alt="Render principal" loading="lazy"/>
+        </div>
+        ${renders.slice(1, 5).map((r, i) => `
+          <div class="render-img-thumb" data-idx="${i+1}">
+            <img src="${r.url}" alt="Render ${i+2}" loading="lazy"/>
+          </div>
+        `).join('')}
+      `;
+      // Lightbox
+      initLightbox(renders.map(r => r.url));
+    } else {
+      rendersGrid.className = '';
+      rendersGrid.innerHTML = '<div class="render-main render-ph r1">Sin renders aún</div>';
+    }
+  }
+
+  // ── Tour 360 Kuula ──
+  const tourSection = document.querySelector('#screen-dashboard .section-panel:nth-child(2)');
+  if (tourSection && project.kuula_url) {
+    const viewer = tourSection.querySelector('.tour-viewer');
+    if (viewer) {
+      viewer.outerHTML = `<div class="tour-embed"><iframe src="${project.kuula_url}" allowfullscreen allow="xr-spatial-tracking"></iframe></div>`;
+    }
+  }
+
+  // ── Planos ──
+  const planos = await Storage.list(project.id, 'planos');
+  const planosWrap = document.querySelector('#screen-dashboard .planos-wrap');
+  if (planosWrap) {
+    if (planos.length > 0) {
+      planosWrap.innerHTML = `
+        <ul class="planos-list" id="planos-tabs">
+          ${planos.map((p, i) => `
+            <li class="plano-item ${i===0?'active':''}" data-url="${p.url}" data-name="${p.name}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                <path d="M14 2v6h6"/>
+              </svg>
+              ${p.name.replace('.pdf','').replace(/-/g,' ')}
+            </li>
+          `).join('')}
+        </ul>
+        <div class="plano-viewer-frame" id="plano-frame">
+          <iframe src="${planos[0].url}#toolbar=0" title="Plano"></iframe>
+          <a class="plano-download-btn" href="${planos[0].url}" download target="_blank">Descargar ↓</a>
+        </div>
+      `;
+      // Click en tabs de planos
+      document.querySelectorAll('.plano-item').forEach(item => {
+        item.addEventListener('click', () => {
+          document.querySelectorAll('.plano-item').forEach(i => i.classList.remove('active'));
+          item.classList.add('active');
+          const frame = document.getElementById('plano-frame');
+          frame.innerHTML = `
+            <iframe src="${item.dataset.url}#toolbar=0" title="Plano"></iframe>
+            <a class="plano-download-btn" href="${item.dataset.url}" download target="_blank">Descargar ↓</a>
+          `;
+        });
+      });
+    } else {
+      planosWrap.innerHTML = `
+        <ul class="planos-tabs" id="planos-tabs">
+          <li class="plano-tab active">Sin planos aún</li>
+        </ul>
+        <div class="plano-preview">Subí planos desde el panel admin</div>
+      `;
+    }
+  }
+}
+
+/* Lightbox */
+let lightboxImages = [];
+let lightboxIndex  = 0;
+
+function initLightbox(urls) {
+  lightboxImages = urls;
+
+  // Crear lightbox si no existe
+  if (!document.getElementById('lightbox')) {
+    const lb = document.createElement('div');
+    lb.id = 'lightbox';
+    lb.className = 'lightbox';
+    lb.innerHTML = `
+      <button class="lightbox-close" id="lb-close">✕</button>
+      <button class="lightbox-prev" id="lb-prev">‹</button>
+      <img id="lb-img" src="" alt=""/>
+      <button class="lightbox-next" id="lb-next">›</button>
+    `;
+    document.body.appendChild(lb);
+    document.getElementById('lb-close').addEventListener('click', closeLightbox);
+    document.getElementById('lb-prev').addEventListener('click', () => moveLightbox(-1));
+    document.getElementById('lb-next').addEventListener('click', () => moveLightbox(1));
+    lb.addEventListener('click', e => { if (e.target === lb) closeLightbox(); });
+  }
+
+  // Clicks en renders
+  document.querySelectorAll('.render-img-main, .render-img-thumb').forEach(el => {
+    el.addEventListener('click', () => {
+      lightboxIndex = parseInt(el.dataset.idx) || 0;
+      openLightbox();
+    });
+  });
+}
+
+function openLightbox() {
+  document.getElementById('lb-img').src = lightboxImages[lightboxIndex];
+  document.getElementById('lightbox').classList.add('open');
+}
+
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+}
+
+function moveLightbox(dir) {
+  lightboxIndex = (lightboxIndex + dir + lightboxImages.length) % lightboxImages.length;
+  document.getElementById('lb-img').src = lightboxImages[lightboxIndex];
 }
