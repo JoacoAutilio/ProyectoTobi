@@ -112,15 +112,16 @@ const Profiles = {
 ══════════════════════════════════════════ */
 const Projects = {
 
-  async getByClient(clientId) {
-    const { data, error } = await db
-      .from('projects')
-      .select('*')
-      .eq('client_id', clientId)
-      .single();
-    if (error) return null;
-    return data;
-  },
+async getByClient(clientId) {
+  const { data, error } = await db
+    .from('projects')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (error || !data || data.length === 0) return null;
+  return data[0];
+},
 
   async getAll() {
     const { data, error } = await db
