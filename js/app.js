@@ -1279,3 +1279,76 @@ function closeDashUploadModal() {
   if (modal) modal.classList.remove('open');
   dashPendingFiles = [];
 }
+
+
+/* ══════════════════════════════════════════
+   LIGHTBOX — VER RENDERS EN PANTALLA COMPLETA
+══════════════════════════════════════════ */
+let lightboxImages = [];
+let lightboxIndex  = 0;
+
+function initLightbox(urls) {
+  lightboxImages = urls;
+
+  if (!document.getElementById('lightbox')) {
+    const lb = document.createElement('div');
+    lb.id = 'lightbox';
+    lb.className = 'lightbox';
+    lb.innerHTML = `
+      <button class="lightbox-close" id="lb-close">✕</button>
+      <button class="lightbox-prev" id="lb-prev">‹</button>
+      <img id="lb-img" src="" alt="Render"/>
+      <button class="lightbox-next" id="lb-next">›</button>
+    `;
+    document.body.appendChild(lb);
+    document.getElementById('lb-close').addEventListener('click', closeLightbox);
+    document.getElementById('lb-prev').addEventListener('click',  () => moveLightbox(-1));
+    document.getElementById('lb-next').addEventListener('click',  () => moveLightbox(1));
+    lb.addEventListener('click', e => { if (e.target === lb) closeLightbox(); });
+    // Teclado
+    document.addEventListener('keydown', e => {
+      if (!document.getElementById('lightbox').classList.contains('open')) return;
+      if (e.key === 'ArrowLeft')  moveLightbox(-1);
+      if (e.key === 'ArrowRight') moveLightbox(1);
+      if (e.key === 'Escape')     closeLightbox();
+    });
+  } else {
+    // Actualizar imágenes si ya existe
+    lightboxImages = urls;
+  }
+
+  // Clicks en renders del dashboard
+  document.querySelectorAll('.render-img-main, .render-img-thumb').forEach(el => {
+    el.style.cursor = 'pointer';
+    el.onclick = () => {
+      lightboxIndex = parseInt(el.dataset.idx) || 0;
+      openLightbox();
+    };
+  });
+
+  // Botón "Pantalla completa" de renders
+  const fullBtn = document.querySelector('#screen-dashboard .section-panel:nth-child(1) .btn-ghost');
+  if (fullBtn) {
+    fullBtn.onclick = () => {
+      lightboxIndex = 0;
+      openLightbox();
+    };
+  }
+}
+
+function openLightbox() {
+  if (!lightboxImages.length) return;
+  document.getElementById('lb-img').src = lightboxImages[lightboxIndex];
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function moveLightbox(dir) {
+  lightboxIndex = (lightboxIndex + dir + lightboxImages.length) % lightboxImages.length;
+  document.getElementById('lb-img').src = lightboxImages[lightboxIndex];
+}
