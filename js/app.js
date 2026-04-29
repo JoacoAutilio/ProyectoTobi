@@ -407,6 +407,248 @@ async function populateClientSelect() {
     : '<option value="">No hay clientes aún</option>';
 }
 
+
+/* ══════════════════════════════════════════
+   EDIT PROJECT PANEL
+══════════════════════════════════════════ */
+async function openEditProject(projId) {
+  const projects = await Projects.getAll();
+  const proj = projects.find(p => p.id === projId);
+  if (!proj) return;
+
+  const panel = document.getElementById('edit-project-panel');
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  document.getElementById('editing-proj-id').value        = proj.id;
+  document.getElementById('edit-panel-title').textContent = `Editando: ${proj.name}`;
+  document.getElementById('edit-proj-name').value         = proj.name || '';
+  document.getElementById('edit-proj-sub').value          = proj.subtitle || '';
+  document.getElementById('edit-proj-loc').value          = proj.location || '';
+  document.getElementById('edit-proj-materials').value    = proj.materials || '';
+  document.getElementById('edit-proj-surface').value      = proj.surface || '';
+  document.getElementById('edit-proj-covered').value      = proj.covered || '';
+  document.getElementById('edit-proj-rooms').value        = proj.rooms || '';
+  document.getElementById('edit-proj-bathrooms').value    = proj.bathrooms || '';
+  document.getElementById('edit-proj-kuula').value        = proj.kuula_url || '';
+
+  const stageEl = document.getElementById('edit-proj-stage');
+  Array.from(stageEl.options).forEach(o => o.selected = o.value === proj.stage);
+
+  const clientSel = document.getElementById('edit-proj-client');
+  const users = await Profiles.getAll();
+  const clients = users.filter(u => u.role === 'client');
+  clientSel.innerHTML = clients.map(c =>
+    `<option value="${c.id}" ${c.id === proj.client_id ? 'selected' : ''}>${c.name}</option>`
+  ).join('');
+
+  await loadEditCurrentFiles(proj.id);
+  initEditUploadZones(proj.id);
+
+  document.getElementById('btn-close-edit').onclick    = () => { panel.style.display = 'none'; clearEditUploadZones(); };
+  document.getElementById('btn-update-project').onclick = () => updateProject(proj.id);
+  document.getElementById('btn-update-kuula').onclick   = () => updateKuula(proj.id);
+  document.getElementById('btn-upload-edit-files').onclick = () => uploadEditFiles(proj.id);
+}
+
+async function loadEditCurrentFiles(projId) {
+  const renders = await Storage.list(projId, 'renders');
+  const rendersEl = document.getElementById('edit-renders-current');
+  rendersEl.innerHTML = renders.length
+    ? renders.map(r => `
+        <div class="edit-file-item">
+          <img src="${r.url}" loading="lazy"/>
+          <button class="edit-file-delete" data-path="${r.path}" title="Eliminar">✕</button>
+        </div>`).join('')
+    : '';
+
+  rendersEl.querySelectorAll('.edit-file-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('¿Eliminar este render?')) return;
+      await Storage.delete(btn.dataset.path);
+      await loadEditCurrentFiles(projId);
+    });
+  });
+
+  const planos = await Storage.list(projId, 'planos');
+  const planosEl = document.getElementById('edit-planos-current');
+  planosEl.innerHTML = planos.length
+    ? planos.map(p => `
+        <div class="plano-preview-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <path d="M14 2v6h6"/>
+          </svg>
+          <span class="plano-name">${p.name}</span>
+          <a href="${p.url}" target="_blank" class="plano-status ok" style="text-decoration:none">Ver ↗</a>
+          <button class="btn-table danger" data-path="${p.path}" style="font-size:10px;padding:3px 8px">✕</button>
+        </div>`).join('')
+    : '';
+
+  planosEl.querySelectorAll('[data-path]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('¿Eliminar este plano?')) return;
+      await Storage.delete(btn.dataset.path);
+      await loadEditCurrentFiles(projId);
+    });
+  });
+}
+
+let editPendingRenders = [];
+let editPendingPlanos  = [];
+
+function initEditUploadZones(projId) {
+  editPendingRenders = [];
+  editPendingPlanos  = [];
+
+  const ri = document.getElementById('edit-renders-input');
+  const rt = document.getElementById('edit-renders-trigger');
+  const rd = document.getElementById('edit-renders-drop');
+  if (ri) {
+    rt.onclick  = () => ri.click();
+    ri.onchange = e => addEditRenders(e.target.files);
+    rd.ondragover  = e => { e.preventDefault(); rd.classList.add('drag-over'); };
+    rd.ondragleave = () => rd.classList.remove('drag-over');
+    rd.ondrop = e => { e.preventDefault(); rd.classList.remove('drag-over'); addEditRenders(e.dataTransfer.files); };
+  }
+
+  const pi = document.getElementById('edit-planos-input');
+  const pt = document.getElementById('edit-planos-trigger');
+  const pd = document.getElementById('edit-planos-drop');
+  if (pi) {
+    pt.onclick  = () => pi.click();
+    pi.onchange = e => addEditPlanos(e.target.files);
+    pd.ondragover  = e => { e.preventDefault(); pd.classList.add('drag-over'); };
+    pd.ondragleave = () => pd.classList.remove('drag-over');
+    pd.ondrop = e => { e.preventDefault(); pd.classList.remove('drag-over'); addEditPlanos(e.dataTransfer.files); };
+  }
+}
+
+function addEditRenders(files) {
+  const preview = document.getElementById('edit-renders-preview');
+  Array.from(files).forEach(file => {
+    if (!file.type.startsWith('image/')) return;
+    editPendingRenders.push(file);
+    const item = document.createElement('div');
+    item.className = 'preview-item';
+    item.innerHTML = `<img src="${URL.createObjectURL(file)}"/><div class="preview-status pending">Pendiente</div>`;
+    preview.appendChild(item);
+  });
+}
+
+function addEditPlanos(files) {
+  const preview = document.getElementById('edit-planos-preview');
+  Array.from(files).forEach(file => {
+    if (file.type !== 'application/pdf') return;
+    editPendingPlanos.push(file);
+    const item = document.createElement('div');
+    item.className = 'plano-preview-item';
+    item.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.5">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+        <path d="M14 2v6h6"/>
+      </svg>
+      <span class="plano-name">${file.name}</span>
+      <span class="plano-size">${(file.size/1024/1024).toFixed(1)} MB</span>
+      <span class="plano-status pending">Pendiente</span>`;
+    preview.appendChild(item);
+  });
+}
+
+async function uploadEditFiles(projId) {
+  const btn = document.getElementById('btn-upload-edit-files');
+  btn.textContent = 'Subiendo...';
+  btn.disabled = true;
+
+  if (editPendingRenders.length > 0) {
+    const prog = document.getElementById('edit-renders-progress');
+    const bar  = document.getElementById('edit-renders-bar');
+    const txt  = document.getElementById('edit-renders-text');
+    prog.style.display = 'flex';
+    const items = document.querySelectorAll('#edit-renders-preview .preview-item');
+    for (let i = 0; i < editPendingRenders.length; i++) {
+      txt.textContent = `Subiendo render ${i+1} de ${editPendingRenders.length}...`;
+      bar.style.setProperty('--progress', `${(i/editPendingRenders.length)*100}%`);
+      const result = await Storage.upload(projId, 'renders', editPendingRenders[i]);
+      const status = items[i]?.querySelector('.preview-status');
+      if (status) { status.className = 'preview-status '+(result.ok?'ok':'err'); status.textContent = result.ok?'✓':'Error'; }
+    }
+    bar.style.setProperty('--progress', '100%');
+    txt.textContent = `✓ ${editPendingRenders.length} renders subidos`;
+  }
+
+  if (editPendingPlanos.length > 0) {
+    const prog = document.getElementById('edit-planos-progress');
+    const txt  = document.getElementById('edit-planos-text');
+    prog.style.display = 'flex';
+    const items = document.querySelectorAll('#edit-planos-preview .plano-preview-item');
+    for (let i = 0; i < editPendingPlanos.length; i++) {
+      txt.textContent = `Subiendo plano ${i+1} de ${editPendingPlanos.length}...`;
+      const result = await Storage.upload(projId, 'planos', editPendingPlanos[i]);
+      const status = items[i]?.querySelector('.plano-status');
+      if (status) { status.className = 'plano-status '+(result.ok?'ok':'err'); status.textContent = result.ok?'✓ Subido':'Error'; }
+    }
+    txt.textContent = `✓ ${editPendingPlanos.length} planos subidos`;
+  }
+
+  btn.textContent = 'Subir archivos seleccionados';
+  btn.disabled = false;
+  await loadEditCurrentFiles(projId);
+  clearEditUploadZones();
+  showAdminAlert('proj-alert', '✓ Archivos subidos correctamente.');
+}
+
+async function updateProject(projId) {
+  const btn = document.getElementById('btn-update-project');
+  btn.textContent = 'Guardando...';
+  btn.disabled = true;
+
+  const { error } = await db
+    .from('projects')
+    .update({
+      name:       document.getElementById('edit-proj-name').value.trim(),
+      subtitle:   document.getElementById('edit-proj-sub').value.trim(),
+      location:   document.getElementById('edit-proj-loc').value.trim(),
+      stage:      document.getElementById('edit-proj-stage').value,
+      client_id:  document.getElementById('edit-proj-client').value,
+      surface:    document.getElementById('edit-proj-surface').value || null,
+      covered:    document.getElementById('edit-proj-covered').value || null,
+      rooms:      document.getElementById('edit-proj-rooms').value || null,
+      bathrooms:  document.getElementById('edit-proj-bathrooms').value || null,
+      materials:  document.getElementById('edit-proj-materials').value.trim(),
+      updated_at: new Date().toLocaleDateString('es-AR'),
+    })
+    .eq('id', projId);
+
+  btn.textContent = 'Guardar cambios';
+  btn.disabled = false;
+
+  if (error) { showAdminAlert('proj-alert', '✗ Error: ' + error.message, true); return; }
+  await renderProjectsTable();
+  showAdminAlert('proj-alert', '✓ Proyecto actualizado.');
+}
+
+async function updateKuula(projId) {
+  const url = document.getElementById('edit-proj-kuula').value.trim();
+  const ok  = await Projects.updateKuula(projId, url);
+  if (ok) showAdminAlert('proj-alert', '✓ Tour 360° guardado.');
+  else    showAdminAlert('proj-alert', '✗ Error al guardar Kuula.', true);
+}
+
+function clearEditUploadZones() {
+  editPendingRenders = [];
+  editPendingPlanos  = [];
+  ['edit-renders-preview','edit-planos-preview'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.innerHTML = '';
+  });
+  ['edit-renders-input','edit-planos-input'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  ['edit-renders-progress','edit-planos-progress'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+}
+
 /* ── Guardar usuario ── */
 async function saveNewUser() {
   const name  = document.getElementById('new-user-name').value.trim();
